@@ -1,0 +1,251 @@
+---
+title: "SES & the microbiome 3.1: Beta Diversity and Permanova; \nCORRECTION 2021"
+author: "Ruth CE Bowyer"
+date: "`r format(Sys.Date())`"
+output: 
+  github_document
+---
+
+```{r global_options, include=FALSE}
+rm(list=ls())                                                                    ~
+knitr::opts_chunk$set(fig.pos = 'H')
+```
+
+# **0. About**
+
+This files contains the correctly specified adjusted models for measures of gut microbiome dissimilarity. The univariate models with just the key variable of interest (income, education or IMD) have not been re-run in this file as they were correctly specified
+
+This file was initially ran in 2021 and was subsequently updated for github publication(see ReadMe for more info)
+
+
+# **1. Data and set up**
+
+## **Libraries**
+
+
+```{r}
+library(phyloseq)
+library(data.table)
+library(ggplot2)
+library(ape)
+library(vegan)
+
+```
+
+
+```{r echo=FALSE}
+
+dd <- "~/Library/CloudStorage/OneDrive-King'sCollegeLondon/Backup/PhD/Data_+_analy/SES/Data/"
+
+```
+
+## **Phyloseq object creation**
+
+```{r}
+
+#dd is the root directory
+otus <- read.table(paste0(dd, "Variance_transformed_SEStrimmed5%OTU_table.txt"), sep = " ", row.names = 1, header = T) 
+
+tree <- read.tree(paste0(dd,"microbiome_tables/phyloseq_tables_aug2017/reduced_tree.tre"))
+tax <- read.csv(paste0(dd,"taxa_SES_trimmed5%.csv"), row.names = 1)
+mapping <- read.csv(paste0(dd,"mapping_ses_correctpcdes041218.csv"))
+
+mapping$IMD5f <- as.factor(mapping$IMD5f)
+mapping$eduff <- as.factor(mapping$eduff)
+mapping$Income4F <- as.factor(mapping$Income4F)
+mapping$FIsqrt <- sqrt(mapping$FI)
+
+OTU <- otu_table(otus, taxa_are_rows = T)
+tax <- as.matrix(tax)
+TAX <- tax_table(tax)
+
+physeq <- phyloseq(OTU, TAX)
+mapping <- sample_data(mapping)
+row.names(mapping) <- mapping$SequencingSpecificName
+physeq1 <- merge_phyloseq(physeq, mapping, tree)
+
+```
+
+
+```{r}
+
+metadata <- as(sample_data(physeq1), "data.frame")
+metadata1 <- metadata[complete.cases(metadata$FIsqrt, metadata$Age, metadata$HEI, metadata$BMI),] 
+map <- sample_data(physeq1)
+bray <- vegdist(t(otus), "bray") 
+bray <- as.dist(as(bray, "matrix"))
+Ord.bray <- ordinate(physeq1, method="MDS", distance=bray)
+
+braym <- as.matrix(bray)
+braym <- as.data.frame(braym)
+bray1 <- braym[which(row.names(braym)%in%metadata1$SequencingSpecificName),]
+bray1 <- bray1[,which(names(bray1)%in%metadata1$SequencingSpecificName)]
+bray1<- as.dist(as(bray1, "matrix"))
+
+set.seed(1)
+
+a1 <- adonis(bray1~IMD5f, data=metadata1, permutations = 5000)
+a1$aov.tab
+```
+# **2. Models**
+
+## **IMD - Bray**
+
+There was a misspecification of a model relating to the adjusted results reported as page 5 in the original publication, referenced on page 5 of the manuscript as ‘adjusted NPMANOVA for Bray–Curtis dissimilarity... and weighted UniFrac’
+
+The model was incorrectly specified as follows (not run):
+
+```{r eval=FALSE, include=T}
+
+adonis(bray1 ~ IMD5f + FI + Age + BMI + HEI + Library_sizelog10, data = metadata1,
+       
+```
+
+
+However, as the variables are added sequentially in this model, the key factor should have been included as the last variable (as in the subsequent model ouputs below)
+
+### **The correctly specified model - IMD/Bray**
+
+```{r warning = F, cache = T}
+
+imd.a <- adonis(bray1 ~ FI + Age + BMI + HEI + Library_sizelog10 + IMD5f, data = metadata1, permutations = 5000)
+
+imd.a$aov.tab
+
+```
+
+If one wanted to understand the relative contribution of each factor to the outcome (ie a marginal model) this is also offered within the vegan package and can give interesting insight
+
+```{r warning=FALSE, cache =T}
+
+imd.m <- adonis2(bray1 ~ FI + Age + BMI + HEI + Library_sizelog10 + IMD5f, by="margin",
+        data = metadata1, permutations = 5000)
+imd.m
+
+```
+
+Below are the correctly specified models only as they should have been included in the paper.
+
+## **IMD - W. Unifrac** 
+
+```{r}
+
+metadata1 <- metadata[complete.cases(metadata$FIsqrt, metadata$Age, metadata$HEI, metadata$BMI),] 
+w.unifrac <- read.table(paste0(dd, "distance_matrixes/weigthed_unifrac_phyloseq_rooted_tree.txt"))
+
+wum <- as.matrix(w.unifrac)
+wum <- as.data.frame(wum)
+wum1 <- wum[which(row.names(wum)%in%metadata1$SequencingSpecificName),] 
+wum1 <- wum1[,which(names(wum1)%in%metadata1$SequencingSpecificName)] 
+wum1<- as.dist(as(wum1, "matrix"))
+
+```
+
+### **The correctly specified model - IMD/W. UniFrac**
+
+```{r warning = F, cache = T}
+
+full.wum.IMD.adonis <- adonis(wum1 ~ FI + Age + BMI + HEI + Library_sizelog10 + IMD5f, 
+                              data = metadata1, permutations = 5000) 
+full.wum.IMD.adonis$aov.tab
+```
+
+## **Education - Bray**
+
+```{r}
+
+metadata2 <- metadata[complete.cases(metadata$FIsqrt, metadata$Age, metadata$HEI, metadata$eduff),]
+bray2 <- braym[which(row.names(braym)%in%metadata2$SequencingSpecificName),] 
+bray2 <- bray2[,which(names(bray2)%in%metadata2$SequencingSpecificName)] 
+bray2<- as.dist(as(bray2, "matrix"))
+
+```
+
+### **The correctly specified model**
+
+```{r warning = F, cache = T}
+full.bray.eduff.adonis <- adonis(bray2 ~ FI + Age + BMI + HEI + Library_sizelog10 + eduff, 
+                                 data = metadata2, permutations = 5000)
+
+full.bray.eduff.adonis$aov.tab
+```
+
+## **Education - W.unifrac**
+
+```{r}
+wum2 <- wum[which(row.names(wum)%in%metadata2$SequencingSpecificName),] 
+wum2 <- wum2[,which(names(wum2)%in%metadata2$SequencingSpecificName)] 
+wum2<- as.dist(as(wum2, "matrix"))
+```
+
+### **The correctly specified model - Education/W. Unifrac**
+
+
+```{r warning = F, cache = T}
+full.wum.eduff.adonis <- adonis(wum2 ~ FI + Age + BMI + HEI + Library_sizelog10 + eduff, 
+                                 data = metadata2, permutations = 5000)
+
+full.wum.eduff.adonis$aov.tab
+```
+
+
+## **Income - Bray**
+
+```{r}
+metadata3 <- metadata[complete.cases(metadata$FIsqrt, metadata$Age, metadata$HEI, metadata$BMI, metadata$Income4F),]
+
+bray3 <- braym[which(row.names(braym)%in%metadata3$SequencingSpecificName),] 
+bray3 <- bray3[,which(names(bray3)%in%metadata3$SequencingSpecificName)] 
+bray3<- as.dist(as(bray3, "matrix"))
+
+```
+
+
+
+### **The correctly specified model**
+
+```{r warning = F, cache = T}
+
+full.bray.inc.adonis <- adonis(bray3 ~ FI + Age + BMI + HEI + Library_sizelog10 + Income4F, 
+                                 data = metadata3, permutations = 5000)
+
+full.bray.inc.adonis$aov.tab
+
+```
+
+
+## **Income - W.Unifrac**
+
+```{r}
+
+wum3 <- wum[which(row.names(wum)%in%metadata3$SequencingSpecificName),] 
+wum3 <- wum3[,which(names(wum3)%in%metadata3$SequencingSpecificName)] 
+wum3<- as.dist(as(wum3, "matrix"))
+
+```
+
+
+### **The correctly specified model**
+
+```{r warning = F, cache = T}
+
+full.wum.inc.adonis <- adonis(wum3 ~ FI + Age + BMI + HEI + Library_sizelog10 + Income4F, 
+                                 data = metadata3, permutations = 5000)
+
+full.wum.inc.adonis$aov.tab
+
+```
+
+# **3. Packages Used**
+
+```{r}
+citation("phyloseq")
+citation("vegan")
+
+## For creation of Rmarkdown files
+citation("rmarkdown")
+citation("kableExtra")
+citation("knitr")
+
+```
+
